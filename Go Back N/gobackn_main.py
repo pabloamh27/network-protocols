@@ -30,6 +30,8 @@ def checksum(frame):
     print("El frame esta corrupto, la transferencia de datos no puede continuar :(")
     return frame
 
+def frame_arrival():
+    print("FRAME_ARRIVAL")
 
 class Frame:
     def __init__(self, frame_type: str, seq_number: int, ack: int, packet_info: str):
@@ -65,7 +67,7 @@ class Sender:
                 print("\n\n\nLa capa de red no tiene datos para enviar")
                 time.sleep(1)
                 continue
-            print("\nEnviando un nuevo paquete")
+            print("\n\n\n\nNetwork_layer_ready: Nuevo paquete listo para enviarse")
             print("El numero de secuencia del paquete es: " , sequence_num)
             #self.next_seq_num += 1
             self.buffer = self.from_network_layer()
@@ -122,7 +124,7 @@ class Sender:
     """
     def wait_confirmation(self):
         frame_arrival = None
-        if random.randint(0,1) == 1:
+        if random.randint(0,8) == 1:
             time.sleep(6)
             #ack_timeout()
             #return 0
@@ -130,7 +132,7 @@ class Sender:
             frame_arrival = self.client_socket.recv(4096)
             print(frame_arrival)
             if frame_arrival:
-                print("Un frame llego")
+                frame_arrival()
                 break
         self.frame_s = pickle.loads(frame_arrival)
         self.stop_timer(self.frame_s.ack)
