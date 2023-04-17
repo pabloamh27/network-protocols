@@ -1,7 +1,3 @@
-#use this as a template #use this as a template /home/luis/Documentos/redes/network-protocols/Proyecto de apoyo/sliding-window/Servidor.py
-#make a client for the slididng window protocol
-# """
-# #
 import socket
 import pickle
 import time
@@ -23,6 +19,10 @@ class Frame:
         self.packet_info = packet_info
         self.seq_number = seq_number
         self.confirmation_number = confirmation_number
+
+def frame_arrival():
+    print("FRAME_ARRIVAL")
+
 
 class Receiver:
     def __init__(self, client_socket, address):

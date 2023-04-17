@@ -1,7 +1,3 @@
-#use this as a template /home/luis/Documentos/redes/network-protocols/Proyecto de apoyo/sliding-window/Servidor.py
-#make a sever for the slididng window protocol
-# """
-#
 import socket
 import pickle
 import time
@@ -17,6 +13,19 @@ class Packet:
         self.info = info
 
 packets = [Packet("Paquete1"), Packet("Paquete2"), Packet("Paquete 3"), Packet("Paquete 4")]
+
+def timeout():
+    print("\n\n\nError: timeout")
+
+
+def checksum(frame):
+    frame.frame_type = "Corrupted Frame"
+    print("\n\n\nError: cksum_err")
+    print("El frame esta corrupto, la transferencia de datos no puede continuar :(")
+    return frame
+
+def frame_arrival_error():
+    print("FRAME_ARRIVAL")
 
 class Frame:
     def __init__(self, frame_type: str, packet_info: str, seq_number: int, confirmation_number: int):
@@ -52,6 +61,8 @@ class Sender:
             self.frame.seq_number = self.next_seq_num
             self.frame.ack = self.next_seq_num
             self.to_physical_layer(self.frame)
+            if frame_result != None and frame_result.frame_type == "Corrupted Frame":
+                exit()
             print("Enviando el frame al receiver")
             print("Esperando confirmación")
             self.wait_confirmation()
@@ -61,6 +72,11 @@ class Sender:
     Fetch a packet from network layer
     """
     def from_network_layer(self):
+        error_prob = random.randint(0,8)
+        if  error_prob == 1:
+            time.sleep(6)
+            timeout()
+            return 0
         if self.current_packet == len(packets):
             self.current_packet = 0
         packet = packets[self.current_packet]
@@ -71,6 +87,10 @@ class Sender:
     Send a frame to the physical layer
     """
     def to_physical_layer(self, frame):
+        error_prob = random.randint(0,12)
+        if  error_prob == 1:
+            frame = checksum(frame)
+            return frame
         self.client_socket.send(pickle.dumps(frame))
         print("Frame enviado")
 
@@ -79,8 +99,15 @@ class Sender:
     Wait for a confirmation from the receiver
     """
     def wait_confirmation(self):
+        if random.randint(0,8) == 1:
+            time.sleep(6)
         while True:
             data = self.client_socket.recv(1024)
+            print(frame_arrival)
+            if frame_arrival:
+                frame_arrival_error()
+                time.sleep(1)
+                break
             self.frame_s = pickle.loads(data)
             if self.frame_s.frame_type == "Confirmation":
                 print("Confirmación recibida")
@@ -93,6 +120,49 @@ class Sender:
     def close(self):
         self.client_socket.close()
         print("Connection closed")
+
+
+
+
+    """
+    Start timer
+    Inputs: seq_number
+    Outputs: None
+    """
+    def start_timer(self, seq_number):
+        if timers[seq_number] is None:
+            timers[seq_number] = Timer(5, self.ackn_timeout, [seq_number])
+            timers[seq_number].start()
+
+    """
+    Stop timer
+    Inputs: seq_number
+    Outputs: None
+    """
+    def stop_timer(self, seq_number):
+        if timers[seq_number] is not None:
+            timers[seq_number].cancel()
+            timers[seq_number] = None
+
+    """
+    Timeout
+    Inputs: seq_number
+    Outputs: None
+    """
+    def ackn_timeout(self, seq_number):
+        print("\n\n\nError: ack_timeout")
+        print("Intento de reenvio de paquete y esperando respuesta")
+        self.resend_frame(seq_number)
+
+    """
+    Resend frame
+    Inputs: seq_number
+    Outputs: None
+    """
+    def resend_frame(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = seq_number
+        self.to_physical_layer(self.frame)
 
 if __name__ == "__main__":
     sock.listen(5)
