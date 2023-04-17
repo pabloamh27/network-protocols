@@ -30,7 +30,7 @@ def checksum(frame):
     print("El frame esta corrupto, la transferencia de datos no puede continuar :(")
     return frame
 
-def frame_arrival():
+def frame_arrival_error():
     print("FRAME_ARRIVAL")
 
 class Frame:
@@ -132,7 +132,8 @@ class Sender:
             frame_arrival = self.client_socket.recv(4096)
             print(frame_arrival)
             if frame_arrival:
-                frame_arrival()
+                frame_arrival_error()
+                time.sleep(1)
                 break
         self.frame_s = pickle.loads(frame_arrival)
         self.stop_timer(self.frame_s.ack)
