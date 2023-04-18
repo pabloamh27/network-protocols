@@ -1,4 +1,3 @@
-from src.frame import Frame, Kind
 import socket, pickle
 
 BUFFER_SIZE = 8192
@@ -12,6 +11,14 @@ host = socket.gethostname()
 portA = 4001
 portB = 4002
 receiverSocket.bind(('', portB))
+
+class Frame:
+
+    def __init__(self, frame_type: str, seq_number: int, ack: int, packet_info: str):
+        self.frame_type = frame_type
+        self.seq_number = seq_number
+        self.ack = ack
+        self.packet_info = packet_info
 
 #it simulates the receiver function in selective repetitive protocol
 def receiverSelectiveRepetitive(windowSize=7):
