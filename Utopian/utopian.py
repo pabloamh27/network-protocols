@@ -1,5 +1,6 @@
 import threading, time, socket, pickle, keyboard, random
 from enum import Enum
+import tkinter as tk
 
 BUFFER_SIZE = 8192
 
@@ -22,8 +23,43 @@ class Frame:
         self.confirmationNumber = confirmationNumber
         self.packetInfo = packetInfo
 
+class SimulatorGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Utopian Protocol Simulator")
+
+        self.frame_listbox = tk.Listbox(self.root)
+        self.frame_listbox.pack(
+            side=tk.LEFT,
+            fill=tk.BOTH,
+            expand=True,
+            padx=10,
+            pady=10
+        )
+
+        scrollbar = tk.Scrollbar(self.root, orient="vertical")
+        scrollbar.config(command=self.frame_listbox.yview)
+        scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+
+        self.frame_listbox.config(yscrollcommand=scrollbar.set)
+
+        self.pause_button = tk.Button(self.root, text="Pause", command=self.pause)
+        self.pause_button.pack(side=tk.BOTTOM, pady=10)
+
+    def add_frame(self, frame):
+        self.frame_listbox.insert(tk.END, f"Kind: {frame.kind} | Seq: {frame.sequenceNumber} | Conf: {frame.confirmationNumber} | Info: {frame.packetInfo}")
+
+    def pause(self):
+        #TODO: implement pause functionality
+        pass
+
+    def start(self):
+        self.root.mainloop()
+
+gui = SimulatorGUI()
+
 '''
-Function that simulates the reciever behavior
+Function that simulates the receiver behavior
 Description: It receives the data from the sender and prints it
 Inputs: None
 Outputs: None
@@ -39,18 +75,18 @@ def receiverUtopian():
     receiverSocket.listen(1)
     connection,address = receiverSocket.accept()
     
-    print("Got connection ", address)
+    gui.add_frame(Frame(0, "", "", f"Got connection {address}"))
     
     frameObtained = Frame(0, "", "", "")
     
     while not keyboard.is_pressed("q"):
         frameObtained = connection.recv(BUFFER_SIZE)
         frameObtained = pickle.loads(frameObtained)
-        print(frameObtained.packetInfo.format(COUNTER))
+        gui.add_frame(frameObtained)
+
         COUNTER += 1
        
     connection.close()
-
 
 '''
 Function that simulates the sender behavior
@@ -64,37 +100,39 @@ def senderUtopian():
     port = 8181
     
     senderSocket.connect((host, port))
-    
-    packet = "Paquete: {}\nInformación: Lorem Ipsum Dolor sit amet"
-    frameToSend = Frame(Kind.DATA, 0, 0, packet)
-    
+    #Definition of the classes 
+    class Packet:
+        def __init__(self, info: str):
+            self.info = info
+
+    sequenceNumber = 0
+    packet = [Packet("Paquete 1"), Packet("Paquete 2"), Packet("Paquete 3"), Packet("Paquete 4")]
+    i = 0
     while True:
         try:
+            if i == 3:
+                i = 0
+
+            frameToSend = Frame(Kind.DATA, sequenceNumber, 0, packet[i].info)
             ETA = random.randint(2, 5)
             time.sleep(ETA)
             serializedFrame = pickle.dumps(frameToSend)
             senderSocket.send(serializedFrame)
-        
+            gui.add_frame(frameToSend)
+            i+=1
+            sequenceNumber+=1
         except socket.error:
             break
     
     senderSocket.close()
 
-'''
-Function that starts the threads
-Description: It starts the threads
-Inputs: None
-Outputs: None
-'''
-def startUtopian():    
-    reciever = threading.Thread(target=receiverUtopian, args=())
-    sender = threading.Thread(target=senderUtopian, args=())
-    
-    reciever.start()
-    time.sleep(2)
-    sender.start()
-    
-    reciever.join()
-    sender.join()
-    
-startUtopian()
+def startSimulation():
+    receiver_thread = threading.Thread(target=receiverUtopian)
+    sender_thread = threading.Thread(target=senderUtopian)
+    receiver_thread.start()
+    sender_thread.start()
+
+gui.startSimulationButton = tk.Button(gui.root, text="Start Simulation", command=startSimulation)
+gui.startSimulationButton.pack(side=tk.BOTTOM, pady=10)
+
+gui.start()
