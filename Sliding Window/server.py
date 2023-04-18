@@ -60,7 +60,7 @@ class Sender:
             self.frame.packet_info = self.buffer
             self.frame.seq_number = self.next_seq_num
             self.frame.ack = self.next_seq_num
-            self.to_physical_layer(self.frame)
+            frame_result = self.to_physical_layer(self.frame)
             if frame_result != None and frame_result.frame_type == "Corrupted Frame":
                 exit()
             print("Enviando el frame al receiver")
@@ -103,8 +103,8 @@ class Sender:
             time.sleep(6)
         while True:
             data = self.client_socket.recv(1024)
-            print(frame_arrival)
-            if frame_arrival:
+            print(data)
+            if data:
                 frame_arrival_error()
                 time.sleep(1)
                 break
