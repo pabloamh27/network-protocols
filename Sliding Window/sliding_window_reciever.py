@@ -62,7 +62,7 @@ class Receiver:
     Simulation of to_network_layer
     """
     def to_network_layer(self, frame):
-        print("Paquete enviado al network layer: " + str(frame.packet_info))
+        print("Paquete enviado al network layer: " + str(frame.packet_info.info))
 
     """
     Simulation of send_confirmation

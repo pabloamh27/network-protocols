@@ -180,7 +180,7 @@ class Sender:
     """
     def to_physical_layer(self, frame):
         error_prob = random.randint(0,12)
-        if  error_prob == 13:
+        if  error_prob == 1:
             frame = checksum(self, frame)
             return frame
         self.client_socket.send(pickle.dumps(frame))
