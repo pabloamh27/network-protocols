@@ -3,6 +3,8 @@ import time
 import random
 import pickle
 from threading import Timer
+import threading
+import tkinter as tk
 
 #packets = ["0, 1110", "1, 1011", "0, 0110", "1, 0111"]
 timers = [None, None, None, None, None, None, None, None, None, None, None, None]
@@ -19,19 +21,71 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 host = "localhost"
 port = 3000
 sock.bind((host, port))
+pausa = False
 
-def timeout():
+
+def timeout(self):
+    self.frame.ack = 0
+    self.frame.packet_info = Packet("Timed Out")
+    gui.add_frame(self.frame)
+    gui.frame_listbox.insert(tk.END, "Error: timeout")
     print("\n\n\nError: timeout")
 
 
-def checksum(frame):
+def checksum(self, frame):
     frame.frame_type = "Corrupted Frame"
+    frame.ack = 0
+    gui.frame_listbox.insert(tk.END, "Error: cksum_err")
+    gui.frame_listbox.insert(tk.END, "El frame esta corrupto, la transferencia de datos no puede continuar :(")
     print("\n\n\nError: cksum_err")
     print("El frame esta corrupto, la transferencia de datos no puede continuar :(")
     return frame
 
-def frame_arrival_error():
+def frame_arrival_error(self):
     print("FRAME_ARRIVAL")
+    gui.frame_listbox.insert(tk.END, "FRAME_ARRIVAL")
+
+
+class SimulatorGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Go Back N Protocol Simulator")
+
+        self.frame_listbox = tk.Listbox(self.root)
+        self.frame_listbox.pack(
+            side=tk.LEFT,
+            fill=tk.BOTH,
+            expand=True,
+            padx=10,
+            pady=10
+        )
+
+        scrollbar = tk.Scrollbar(self.root, orient="vertical")
+        scrollbar.config(command=self.frame_listbox.yview)
+        scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+
+        self.frame_listbox.config(yscrollcommand=scrollbar.set)
+
+        self.pause_button = tk.Button(self.root, text="Pause/Resume", command=self.pause)
+        self.pause_button.pack(side=tk.BOTTOM, pady=10)
+
+    def add_frame(self, frame):
+        self.frame_listbox.insert(tk.END, f"Kind: {frame.frame_type} | Seq: {frame.seq_number} | Ack?: {frame.ack} | Info: {frame.packet_info.info}")
+
+    def pause(self):
+        global pausa
+        if pausa == False:
+            self.frame_listbox.insert(tk.END, "El sistema está pausado!")
+            pausa = True
+        else:
+            self.frame_listbox.insert(tk.END, "El sistema se reanudó!")
+            pausa = False
+
+    def start(self):
+        self.root.mainloop()
+
+gui = SimulatorGUI()
+
 
 class Frame:
     def __init__(self, frame_type: str, seq_number: int, ack: int, packet_info: str):
@@ -53,7 +107,6 @@ class Sender:
         self.frame = Frame("Normal Frame", None, None, None)
         self.frame_s = Frame("Confirmation", None, None, None)
         self.event_type = "FRAME_ARRIVAL"
-        self.timeout = timeout()
 
     """
     Starts the whole simulation of the selective repeat protocol
@@ -64,13 +117,24 @@ class Sender:
     def start(self):
         sequence_num = 1
         while True:
+            if pausa == True:
+                continue
+            if random.randint(0,10) in range (0,7):
+                print("\n\n\nLa capa de red no tiene datos para enviar")
+                time.sleep(1)
+                continue
+            gui.frame_listbox.insert(tk.END ,"Network_layer_ready: Nuevo paquete listo para enviarse")
             #Send the frame
-            self.frame = Frame("Normal Frame", sequence_num, None, packets[self.current_packet].info)
-            self.buffer.append(self.frame)
-            self.send_frame(self.frame)
-            #Start the timer
-            timers[sequence_num] = Timer(3, self.timeout)
-            timers[sequence_num].start()
+            self.buffer = self.from_network_layer()
+            if self.buffer == 0:
+                continue
+            self.frame.packet_info = self.buffer
+            self.frame.seq_number = self.next_seq_num
+            self.frame.ack = self.next_seq_num
+            frame_result = self.to_physical_layer(self.frame)
+            if frame_result != None and frame_result.frame_type == "Corrupted Frame":
+                time.sleep(2)                
+                exit()
             #Increment the sequence number
             sequence_num += 1
             #Increment the current packet
@@ -80,50 +144,136 @@ class Sender:
                 self.current_packet = 0
             #Wait for the confirmation
             self.wait_for_confirmation()
+            self.frame.seq_number = sequence_num
+            self.frame.ack = 1
+            gui.add_frame(self.frame)
             #Check if the sequence number is out of the range of the window size
-            if sequence_num == self.window_size + 1:
-                sequence_num = 1
+            if sequence_num == self.window_size:
+                sequence_num = 0
+            #Increment the next sequence number
+            self.next_seq_num += 1
+            #Check if the next sequence number is out of the range of the window size
+            if self.next_seq_num == self.window_size:
+                self.next_seq_num = 0
+            #Wait for the next frame
+            time.sleep(2)
+
 
     """
-    Sends the frame to the reciever
-    Description: Sends the frame to the reciever and waits for the confirmation
+    Start timer
+    Inputs: seq_number
+    Outputs: None
+    """
+    def start_timer(self, seq_number):
+        if timers[seq_number] is None:
+            timers[seq_number] = Timer(5, self.ackn_timeout, [seq_number])
+            timers[seq_number].start()
+
+    """
+    Stop timer
+    Inputs: seq_number
+    Outputs: None
+    """
+    def stop_timer(self, seq_number):
+        if timers[seq_number] is not None:
+            timers[seq_number].cancel()
+            timers[seq_number] = None
+
+
+    """
+    Send frame to physical layer
     Inputs: frame
+    Outputs: None
     """
-    def send_frame(self, frame):
-        print("\nEnviando el siguiente paquete: " + str(frame.packet_info))
+    def to_physical_layer(self, frame):
+        error_prob = random.randint(0,12)
+        if  error_prob == 1:
+            frame = checksum(self, frame)
+            return frame
         self.client_socket.send(pickle.dumps(frame))
-        print("Paquete enviado")
-
+        self.start_timer(frame.seq_number)
+        return frame
     """
     Waits for the confirmation of the frame
     Description: Waits for the confirmation of the frame and checks if the frame is corrupted or not
     Inputs: None
     """
     def wait_for_confirmation(self):
-        print("Esperando la confirmacion del paquete...")
-        self.frame_s = pickle.loads(self.client_socket.recv(1024))
-        print("Confirmacion recibida")
-        #Check if the frame is corrupted
-        if self.frame_s.frame_type == "Corrupted Frame":
-            self.frame_s = checksum(self.frame_s)
-        #Check if the frame is a confirmation
-        if self.frame_s.frame_type == "Confirmation":
-            #Stop the timer
-            timers[self.frame_s.seq_number].cancel()
-            print("El paquete se ha enviado correctamente")
-            #Check if the frame is the last one
-            if self.frame_s.seq_number == self.window_size:
-                self.base = 1
-                self.next_seq_num = 1
-            else:
-                self.base = self.frame_s.seq_number + 1
-                self.next_seq_num = self.frame_s.seq_number + 1
+        frame_arrival = None
+        if random.randint(0,8) == 1:
+            time.sleep(6)
+            #ack_timeout()
+            #return 0
+        while True:
+            frame_arrival = self.client_socket.recv(4096)
+            print(frame_arrival)
+            if frame_arrival:
+                frame_arrival_error(self)
+                time.sleep(1)
+                break
+        self.frame_s = pickle.loads(frame_arrival)
+        self.stop_timer(self.frame_s.ack)
+        self.base = self.frame_s.ack + 1
 
-#Start the server
-sock.listen(1)
-print("Waiting for connection...")
-client_socket, address = sock.accept()
-print("Connection established")
-sender = Sender(client_socket, address)
-sender.start()
 
+    """
+    Timeout
+    Inputs: seq_number
+    Outputs: None
+    """
+    def ackn_timeout(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = 0
+        self.frame.packet_info.info = "Timed out on ACK"
+        gui.frame_listbox.insert(tk.END, "Error: ack_timeout")
+        gui.frame_listbox.insert(tk.END, "Intento de reenvio de paquete y esperando respuesta")
+        gui.add_frame(self.frame)
+        print("\n\n\nError: ack_timeout")
+        print("Intento de reenvio de paquete y esperando respuesta")
+        self.resend_frame(seq_number)
+
+    """
+    Resend frame
+    Inputs: seq_number
+    Outputs: None
+    """
+    def resend_frame(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = seq_number
+        self.to_physical_layer(self.frame)
+
+
+    """
+    Get packet from network layer
+    Inputs: None
+    Outputs: packet
+    """
+    def from_network_layer(self):
+        error_prob = random.randint(0,8)
+        if  error_prob == 1:
+            time.sleep(6)
+            timeout(self)
+            return 0
+        if self.current_packet == len(packets):
+            self.current_packet = 0
+        packet = packets[self.current_packet]
+        self.current_packet += 1
+        return packet
+
+def startSimulation():
+    sock.listen(1)
+    print("Waiting for connection...")
+    client_socket, address = sock.accept()
+    print("Connection established")
+    sender = Sender(client_socket, address)
+    sender.start()
+    client_socket.close()
+    print("Conexion cerrada")
+
+def button():
+    threading.Thread(target=startSimulation).start()
+
+gui.startSimulationButton = tk.Button(gui.root, text="Start Simulation", command=button)
+gui.startSimulationButton.pack(side=tk.BOTTOM, pady=10)
+
+gui.start()
