@@ -1,8 +1,10 @@
 import socket
+import threading
 import time
 import random
 import pickle
 from threading import Timer
+import tkinter as tk
 
 #packets = ["0, 1110", "1, 1011", "0, 0110", "1, 0111"]
 timers = [None, None, None, None, None, None, None, None, None, None, None, None]
@@ -19,19 +21,69 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 host = "localhost"
 port = 3000
 sock.bind((host, port))
+pausa = False
 
-def timeout():
+def timeout(self):
+    self.frame.frame_type = "Timed out"
+    self.frame.ack = 0
+    gui.add_frame(self.frame)
+    gui.frame_listbox.insert(tk.END, "Error: timeout")
     print("\n\n\nError: timeout")
 
 
-def checksum(frame):
+def checksum(self, frame):
     frame.frame_type = "Corrupted Frame"
+    frame.ack = 0
+    gui.frame_listbox.insert(tk.END, "Error: cksum_err")
+    gui.frame_listbox.insert(tk.END, "El frame esta corrupto, la transferencia de datos no puede continuar :(")
     print("\n\n\nError: cksum_err")
     print("El frame esta corrupto, la transferencia de datos no puede continuar :(")
     return frame
 
-def frame_arrival_error():
+def frame_arrival_error(self):
     print("FRAME_ARRIVAL")
+    gui.frame_listbox.insert(tk.END, "FRAME_ARRIVAL")
+
+class SimulatorGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Go Back N Protocol Simulator")
+
+        self.frame_listbox = tk.Listbox(self.root)
+        self.frame_listbox.pack(
+            side=tk.LEFT,
+            fill=tk.BOTH,
+            expand=True,
+            padx=10,
+            pady=10
+        )
+
+        scrollbar = tk.Scrollbar(self.root, orient="vertical")
+        scrollbar.config(command=self.frame_listbox.yview)
+        scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+
+        self.frame_listbox.config(yscrollcommand=scrollbar.set)
+
+        self.pause_button = tk.Button(self.root, text="Pause/Resume", command=self.pause)
+        self.pause_button.pack(side=tk.BOTTOM, pady=10)
+
+    def add_frame(self, frame):
+        self.frame_listbox.insert(tk.END, f"Kind: {frame.frame_type} | Seq: {frame.seq_number} | Ack?: {frame.ack} | Info: {frame.packet_info.info}")
+
+    def pause(self):
+        global pausa
+        if pausa == False:
+            self.frame_listbox.insert(tk.END, "El sistema está pausado!")
+            pausa = True
+        else:
+            self.frame_listbox.insert(tk.END, "El sistema se reanudó!")
+            pausa = False
+
+    def start(self):
+        self.root.mainloop()
+
+gui = SimulatorGUI()
+
 
 class Frame:
     def __init__(self, frame_type: str, seq_number: int, ack: int, packet_info: str):
@@ -63,11 +115,13 @@ class Sender:
     def begin(self):
         sequence_num = 1
         while True:
+            if pausa == True:
+                continue
             if random.randint(0,10) in range (0,7):
                 print("\n\n\nLa capa de red no tiene datos para enviar")
                 time.sleep(1)
                 continue
-            print("\n\n\n\nNetwork_layer_ready: Nuevo paquete listo para enviarse")
+            gui.frame_listbox.insert(tk.END ,"Network_layer_ready: Nuevo paquete listo para enviarse")
             print("El numero de secuencia del paquete es: " , sequence_num)
             #self.next_seq_num += 1
             self.buffer = self.from_network_layer()
@@ -83,6 +137,9 @@ class Sender:
             print("Enviando el frame al receiver")
             print("Esperando confirmación")
             self.wait_confirmation()
+            self.frame.seq_number = sequence_num
+            self.frame.ack = 1
+            gui.add_frame(self.frame)
             sequence_num += 1
             time.sleep(2)
 
@@ -95,7 +152,7 @@ class Sender:
         error_prob = random.randint(0,8)
         if  error_prob == 1:
             time.sleep(6)
-            timeout()
+            timeout(self)
             return 0
         if self.current_packet == len(packets):
             self.current_packet = 0
@@ -112,10 +169,11 @@ class Sender:
     def to_physical_layer(self, frame):
         error_prob = random.randint(0,12)
         if  error_prob == 1:
-            frame = checksum(frame)
+            frame = checksum(self, frame)
             return frame
         self.client_socket.send(pickle.dumps(frame))
         self.start_timer(frame.seq_number)
+        return frame
 
     """
     Wait for confirmation from receiver
@@ -132,7 +190,7 @@ class Sender:
             frame_arrival = self.client_socket.recv(4096)
             print(frame_arrival)
             if frame_arrival:
-                frame_arrival_error()
+                frame_arrival_error(self)
                 time.sleep(1)
                 break
         self.frame_s = pickle.loads(frame_arrival)
@@ -165,6 +223,12 @@ class Sender:
     Outputs: None
     """
     def ackn_timeout(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = 0
+        self.frame.packet_info.info = "Timed out on ACK"
+        gui.frame_listbox.insert(tk.END, "Error: ack_timeout")
+        gui.frame_listbox.insert(tk.END, "Intento de reenvio de paquete y esperando respuesta")
+        gui.add_frame(self.frame)
         print("\n\n\nError: ack_timeout")
         print("Intento de reenvio de paquete y esperando respuesta")
         self.resend_frame(seq_number)
@@ -182,13 +246,21 @@ class Sender:
 
 # This starts the code for the go back n sender
 #NOTE: YOU HAVE TO RUN BOTH gobackn_main.py and gobackn_receiver.py AT THE SAME TIME TO MAKE IT WORK!
-sock.listen(5)
-print("Esperando conexion")
-while True:
-    client_socket, address = sock.accept()
-    print("Conexion establecida")
-    sender = Sender(client_socket, address)
-    sender.begin()
-    client_socket.close()
-    print("Conexion cerrada")
+def startSimulation():
+    sock.listen(5)
+    print("Esperando conexion")
+    while True:
+        client_socket, address = sock.accept()
+        print("Conexion establecida")
+        sender = Sender(client_socket, address)
+        sender.begin()
+        client_socket.close()
+        print("Conexion cerrada")
 
+def button():
+    threading.Thread(target=startSimulation).start()
+
+gui.startSimulationButton = tk.Button(gui.root, text="Start Simulation", command=button)
+gui.startSimulationButton.pack(side=tk.BOTTOM, pady=10)
+
+gui.start()

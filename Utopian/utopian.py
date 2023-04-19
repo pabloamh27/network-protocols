@@ -3,6 +3,7 @@ from enum import Enum
 import tkinter as tk
 
 BUFFER_SIZE = 8192
+pausa = False
 
 #This class is to define the kind of data
 class Kind(Enum):
@@ -43,15 +44,21 @@ class SimulatorGUI:
 
         self.frame_listbox.config(yscrollcommand=scrollbar.set)
 
-        self.pause_button = tk.Button(self.root, text="Pause", command=self.pause)
+        self.pause_button = tk.Button(self.root, text="Pause/Resume", command=self.pause)
         self.pause_button.pack(side=tk.BOTTOM, pady=10)
 
     def add_frame(self, frame):
         self.frame_listbox.insert(tk.END, f"Kind: {frame.kind} | Seq: {frame.sequenceNumber} | Conf: {frame.confirmationNumber} | Info: {frame.packetInfo}")
 
     def pause(self):
-        #TODO: implement pause functionality
-        pass
+        global pausa
+        print ("Pausa fue llamado")
+        if pausa == False:
+            self.frame_listbox.insert(tk.END, "El sistema está pausado!")
+            pausa = True
+        else:
+            self.frame_listbox.insert(tk.END, "El sistema se reanudó!")
+            pausa = False
 
     def start(self):
         self.root.mainloop()
@@ -82,7 +89,6 @@ def receiverUtopian():
     while not keyboard.is_pressed("q"):
         frameObtained = connection.recv(BUFFER_SIZE)
         frameObtained = pickle.loads(frameObtained)
-        gui.add_frame(frameObtained)
 
         COUNTER += 1
        
@@ -105,14 +111,15 @@ def senderUtopian():
         def __init__(self, info: str):
             self.info = info
 
-    sequenceNumber = 0
+    sequenceNumber = 1
     packet = [Packet("Paquete 1"), Packet("Paquete 2"), Packet("Paquete 3"), Packet("Paquete 4")]
     i = 0
     while True:
         try:
-            if i == 3:
+            if i == 4:
                 i = 0
-
+            if pausa == True:
+                continue
             frameToSend = Frame(Kind.DATA, sequenceNumber, 0, packet[i].info)
             ETA = random.randint(2, 5)
             time.sleep(ETA)
