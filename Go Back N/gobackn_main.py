@@ -24,8 +24,8 @@ sock.bind((host, port))
 pausa = False
 
 def timeout(self):
-    self.frame.frame_type = "Timed out"
     self.frame.ack = 0
+    self.frame.packet_info = Packet("Timed Out")
     gui.add_frame(self.frame)
     gui.frame_listbox.insert(tk.END, "Error: timeout")
     print("\n\n\nError: timeout")
@@ -133,6 +133,7 @@ class Sender:
             self.frame.ack = self.next_seq_num
             frame_result = self.to_physical_layer(self.frame)
             if frame_result != None and frame_result.frame_type == "Corrupted Frame":
+                time.sleep(2)  
                 exit()
             print("Enviando el frame al receiver")
             print("Esperando confirmación")
@@ -225,7 +226,6 @@ class Sender:
     def ackn_timeout(self, seq_number):
         self.frame.seq_number = seq_number
         self.frame.ack = 0
-        self.frame.packet_info.info = "Timed out on ACK"
         gui.frame_listbox.insert(tk.END, "Error: ack_timeout")
         gui.frame_listbox.insert(tk.END, "Intento de reenvio de paquete y esperando respuesta")
         gui.add_frame(self.frame)

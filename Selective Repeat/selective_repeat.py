@@ -21,11 +21,12 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 host = "localhost"
 port = 3000
 sock.bind((host, port))
+pausa = False
+
 
 def timeout(self):
-    self.frame.frame_type = "Timed out"
     self.frame.ack = 0
-    self.frame.packet_info.info = "Timed out"
+    self.frame.packet_info = Packet("Timed Out")
     gui.add_frame(self.frame)
     gui.frame_listbox.insert(tk.END, "Error: timeout")
     print("\n\n\nError: timeout")
@@ -106,7 +107,6 @@ class Sender:
         self.frame = Frame("Normal Frame", None, None, None)
         self.frame_s = Frame("Confirmation", None, None, None)
         self.event_type = "FRAME_ARRIVAL"
-        self.timeout = timeout(self)
 
     """
     Starts the whole simulation of the selective repeat protocol
@@ -125,7 +125,7 @@ class Sender:
                 continue
             gui.frame_listbox.insert(tk.END ,"Network_layer_ready: Nuevo paquete listo para enviarse")
             #Send the frame
-            self.buffer = self.from_network_layer(self)
+            self.buffer = self.from_network_layer()
             if self.buffer == 0:
                 continue
             self.frame.packet_info = self.buffer
@@ -133,6 +133,7 @@ class Sender:
             self.frame.ack = self.next_seq_num
             frame_result = self.to_physical_layer(self.frame)
             if frame_result != None and frame_result.frame_type == "Corrupted Frame":
+                time.sleep(2)                
                 exit()
             #Increment the sequence number
             sequence_num += 1
@@ -147,8 +148,14 @@ class Sender:
             self.frame.ack = 1
             gui.add_frame(self.frame)
             #Check if the sequence number is out of the range of the window size
-            if sequence_num == self.window_size + 1:
-                sequence_num = 1
+            if sequence_num == self.window_size:
+                sequence_num = 0
+            #Increment the next sequence number
+            self.next_seq_num += 1
+            #Check if the next sequence number is out of the range of the window size
+            if self.next_seq_num == self.window_size:
+                self.next_seq_num = 0
+            #Wait for the next frame
             time.sleep(2)
 
 
@@ -192,23 +199,48 @@ class Sender:
     Inputs: None
     """
     def wait_for_confirmation(self):
+        frame_arrival = None
+        if random.randint(0,8) == 1:
+            time.sleep(6)
+            #ack_timeout()
+            #return 0
         while True:
-            if pausa == True:
-                continue
-            self.client_socket.settimeout(1)
-            try:
-                frame = self.client_socket.recv(1024)
-                frame = pickle.loads(frame)
-                if frame.frame_type == "Confirmation":
-                    gui.add_frame(frame)
-                    self.stop_timer(frame.seq_number)
-                    return
-                elif frame.frame_type == "Corrupted Frame":
-                    gui.add_frame(frame)
-                    self.stop_timer(frame.seq_number)
-                    return
-            except:
-                continue
+            frame_arrival = self.client_socket.recv(4096)
+            print(frame_arrival)
+            if frame_arrival:
+                frame_arrival_error(self)
+                time.sleep(1)
+                break
+        self.frame_s = pickle.loads(frame_arrival)
+        self.stop_timer(self.frame_s.ack)
+        self.base = self.frame_s.ack + 1
+
+
+    """
+    Timeout
+    Inputs: seq_number
+    Outputs: None
+    """
+    def ackn_timeout(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = 0
+        self.frame.packet_info.info = "Timed out on ACK"
+        gui.frame_listbox.insert(tk.END, "Error: ack_timeout")
+        gui.frame_listbox.insert(tk.END, "Intento de reenvio de paquete y esperando respuesta")
+        gui.add_frame(self.frame)
+        print("\n\n\nError: ack_timeout")
+        print("Intento de reenvio de paquete y esperando respuesta")
+        self.resend_frame(seq_number)
+
+    """
+    Resend frame
+    Inputs: seq_number
+    Outputs: None
+    """
+    def resend_frame(self, seq_number):
+        self.frame.seq_number = seq_number
+        self.frame.ack = seq_number
+        self.to_physical_layer(self.frame)
 
 
     """

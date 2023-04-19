@@ -43,7 +43,7 @@ def reciever():
         if str(package_name) != str(frame.packet_info):
             counter += 1
         frame_arrival()
-        print("Paquete: " + str(frame.packet_info))
+        print("Paquete: " + str(frame.packet_info.info))
         print("El paquete contiene el siguiente numero de secuencia: ", counter)
         print("Enviando confirmación")
         frame_s = Frame("Confirmation", frame.seq_number, frame.ack, None)
