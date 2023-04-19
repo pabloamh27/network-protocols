@@ -49,7 +49,7 @@ def frame_arrival_error(self):
 class SimulatorGUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Go Back N Protocol Simulator")
+        self.root.title("Selective Repeat Protocol Simulator")
 
         self.frame_listbox = tk.Listbox(self.root)
         self.frame_listbox.pack(
@@ -116,7 +116,7 @@ class Sender:
     #Starts the whole simulation of the selective repeat protocol
     def start(self):
         sequence_num = 1
-        while True:
+        while True: #Do the sender while true loop applying the selective repeat network protocol
             if pausa == True:
                 continue
             if random.randint(0,10) in range (0,7):
@@ -124,39 +124,31 @@ class Sender:
                 time.sleep(1)
                 continue
             gui.frame_listbox.insert(tk.END ,"Network_layer_ready: Nuevo paquete listo para enviarse")
-            #Send the frame
+            print("El numero de secuencia del paquete es: " , sequence_num)
+            #self.next_seq_num += 1
             self.buffer = self.from_network_layer()
             if self.buffer == 0:
                 continue
+            print("Paquete obtenido")
             self.frame.packet_info = self.buffer
             self.frame.seq_number = self.next_seq_num
             self.frame.ack = self.next_seq_num
             frame_result = self.to_physical_layer(self.frame)
             if frame_result != None and frame_result.frame_type == "Corrupted Frame":
-                time.sleep(2)                
+                time.sleep(2)  
                 exit()
-            #Increment the sequence number
-            sequence_num += 1
-            #Increment the current packet
-            self.current_packet += 1
-            #Check if the current packet is out of the range of the packets
-            if self.current_packet == len(packets):
-                self.current_packet = 0
-            #Wait for the confirmation
             self.wait_for_confirmation()
+            self.next_seq_num += 1
             self.frame.seq_number = sequence_num
             self.frame.ack = 1
             gui.add_frame(self.frame)
-            #Check if the sequence number is out of the range of the window size
-            if sequence_num == self.window_size:
-                sequence_num = 0
-            #Increment the next sequence number
-            self.next_seq_num += 1
-            #Check if the next sequence number is out of the range of the window size
-            if self.next_seq_num == self.window_size:
-                self.next_seq_num = 0
-            #Wait for the next frame
-            time.sleep(2)
+            sequence_num += 1
+            if self.next_seq_num == 4:
+                self.next_seq_num = 1
+            if self.base == 4:
+                self.base = 1
+
+
 
 
     """
