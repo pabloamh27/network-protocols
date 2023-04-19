@@ -123,26 +123,37 @@ class Sender:
                 continue
             gui.frame_listbox.insert(tk.END ,"Network_layer_ready: Nuevo paquete listo para enviarse")
             print("El numero de secuencia del paquete es: " , sequence_num)
-            #self.next_seq_num += 1
-            self.buffer = self.from_network_layer()
-            if self.buffer == 0:
+            #Go back N algorithm
+            if self.next_seq_num < self.base + self.window_size:
+                self.buffer_network = self.from_network_layer()
+                if self.buffer_network == 0:
+                    continue
+                print("Paquete obtenido")
+                self.frame = Frame("Normal Frame", sequence_num, 0, self.buffer_network)
+                frame_result = self.to_physical_layer(self.frame)
+                if frame_result != None and frame_result.frame_type == "Corrupted Frame":
+                    time.sleep(2)  
+                    exit()
+                self.buffer.append(frame_result)
+                self.next_seq_num += 1
+                self.wait_confirmation()
+                #ACK confirmed
+                self.base += 1
+                self.frame.seq_number = sequence_num
+                self.frame.ack = 1
+                gui.add_frame(self.frame)
+                sequence_num += 1
+                if self.base == self.next_seq_num:
+                    self.start_timer(self.base)                
+            else:
+                print("La ventana esta llena, el paquete se descarta")
+                gui.frame_listbox.insert(tk.END, "La ventana esta llena, el paquete se descarta")
+                self.next_seq_num = 0
                 continue
-            print("Paquete obtenido")
-            self.frame.packet_info = self.buffer
-            self.frame.seq_number = self.next_seq_num
-            self.frame.ack = self.next_seq_num
-            frame_result = self.to_physical_layer(self.frame)
-            if frame_result != None and frame_result.frame_type == "Corrupted Frame":
-                time.sleep(2)  
-                exit()
-            print("Enviando el frame al receiver")
-            print("Esperando confirmación")
-            self.wait_confirmation()
-            self.frame.seq_number = sequence_num
-            self.frame.ack = 1
-            gui.add_frame(self.frame)
-            sequence_num += 1
-            time.sleep(2)
+
+
+
+
 
     """
     Get packet from network layer
@@ -169,7 +180,7 @@ class Sender:
     """
     def to_physical_layer(self, frame):
         error_prob = random.randint(0,12)
-        if  error_prob == 1:
+        if  error_prob == 13:
             frame = checksum(self, frame)
             return frame
         self.client_socket.send(pickle.dumps(frame))
